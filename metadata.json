@@ -1,0 +1,6 @@
+{
+  "name": "CERDAS (Cerita Digital Anak Sempatik)",
+  "description": "Aplikasi interaktif literasi anak berbasis 4F (Fact, Feeling, Finding, Future) dan 7 Kebiasaan Anak Indonesia Hebat dengan login Google Multi-Peran (Guru Wali, Murid, Guru BK, Admin).",
+  "requestFramePermissions": ["microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

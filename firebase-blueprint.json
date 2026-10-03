@@ -1,0 +1,100 @@
+{
+  "entities": {
+    "User": {
+      "title": "User Profile",
+      "description": "User account registration and multi-role configuration",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "maxLength": 128 },
+        "email": { "type": "string", "maxLength": 128 },
+        "displayName": { "type": "string", "maxLength": 128 },
+        "photoURL": { "type": "string", "maxLength": 512 },
+        "role": { "type": "string", "enum": ["guru_wali", "guru_non_wali", "murid", "guru_bk"] },
+        "kelas": { "type": "string", "maxLength": 32 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email", "displayName", "role"]
+    },
+    "Story": {
+      "title": "Cerita Digital",
+      "description": "Digital story written by murid integrating 4F framework and 7 Habits",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "title": { "type": "string", "maxLength": 128 },
+        "authorId": { "type": "string", "maxLength": 128 },
+        "authorName": { "type": "string", "maxLength": 128 },
+        "authorKelas": { "type": "string", "maxLength": 32 },
+        "content": { "type": "string", "maxLength": 5000 },
+        "illustrationUrl": { "type": "string", "maxLength": 512 },
+        "fact": { "type": "string", "maxLength": 2000 },
+        "feeling": { "type": "string", "maxLength": 1000 },
+        "feelingEmoji": { "type": "string", "maxLength": 16 },
+        "finding": { "type": "string", "maxLength": 2000 },
+        "future": { "type": "string", "maxLength": 2000 },
+        "associatedHabits": { "type": "array" },
+        "status": { "type": "string", "enum": ["draft", "submitted", "reviewed"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "aiSummary": { "type": "string", "maxLength": 1000 },
+        "aiFeedback": { "type": "string", "maxLength": 2000 }
+      },
+      "required": ["id", "title", "authorId", "authorName", "content", "fact", "feeling", "finding", "future", "associatedHabits", "status"]
+    },
+    "Feedback": {
+      "title": "Ulasan Guru atau BK",
+      "description": "Feedback and appreciation given by Guru Wali, Non-Wali, or BK to Murid's story",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "storyId": { "type": "string", "maxLength": 128 },
+        "reviewerId": { "type": "string", "maxLength": 128 },
+        "reviewerName": { "type": "string", "maxLength": 128 },
+        "reviewerRole": { "type": "string", "enum": ["guru_wali", "guru_non_wali", "guru_bk"] },
+        "feedbackText": { "type": "string", "maxLength": 2000 },
+        "stars": { "type": "integer" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "storyId", "reviewerId", "reviewerName", "reviewerRole", "feedbackText", "stars", "createdAt"]
+    },
+    "HabitTracker": {
+      "title": "Catatan 7 Kebiasaan Harian",
+      "description": "Daily habit tracking log for students based on the 7 Habits of Great Indonesian Kids",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "studentId": { "type": "string", "maxLength": 128 },
+        "studentName": { "type": "string", "maxLength": 128 },
+        "studentKelas": { "type": "string", "maxLength": 32 },
+        "date": { "type": "string", "maxLength": 16 },
+        "bangun_pagi": { "type": "boolean" },
+        "beribadah": { "type": "boolean" },
+        "berolahraga": { "type": "boolean" },
+        "makan_sehat": { "type": "boolean" },
+        "gemar_belajar": { "type": "boolean" },
+        "bermasyarakat": { "type": "boolean" },
+        "tidur_cepat": { "type": "boolean" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "studentId", "date"]
+    }
+  },
+  "firestore": {
+    "users/{userId}": {
+      "schema": "User",
+      "description": "User profiles partitioned by Google UID"
+    },
+    "stories/{storyId}": {
+      "schema": "Story",
+      "description": "Collection of digital stories with 4F and 7 Habits"
+    },
+    "stories/{storyId}/feedbacks/{feedbackId}": {
+      "schema": "Feedback",
+      "description": "Feedbacks/reviews subcollection for each story"
+    },
+    "habits/{habitId}": {
+      "schema": "HabitTracker",
+      "description": "Daily habit logs for murid"
+    }
+  }
+}

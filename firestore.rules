@@ -1,0 +1,131 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Default deny catch-all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Global Helpers
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isEmailVerified() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function getUserData(uid) {
+      return exists(/databases/$(database)/documents/users/$(uid)) ? get(/databases/$(database)/documents/users/$(uid)).data : {};
+    }
+
+    function getUserRole(uid) {
+      return exists(/databases/$(database)/documents/users/$(uid)) && "role" in get(/databases/$(database)/documents/users/$(uid)).data ? get(/databases/$(database)/documents/users/$(uid)).data.role : "murid";
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        request.auth.token.email == "isumayasa91@guru.smp.belajar.id" ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "admin")
+      );
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+    
+    function existing() {
+      return resource.data;
+    }
+
+    // --- Users Collection ---
+    match /users/{userId} {
+      allow read: if isSignedIn();
+      
+      // On create: users can write their own profile, or admin can write
+      allow create: if isSignedIn() 
+        && (request.auth.uid == userId || isAdmin())
+        && (incoming().uid == userId || isAdmin())
+        && incoming().role in ["guru_wali", "murid", "guru_bk", "admin"]
+        && incoming().displayName is string && incoming().displayName.size() <= 200;
+
+      // On update: users can update non-role fields, or admin can update anything
+      allow update: if isSignedIn() 
+        && (
+          isAdmin() || 
+          (request.auth.uid == userId
+            && (incoming().uid == userId || !("uid" in incoming()))
+            && (incoming().email == existing().email || !("email" in incoming()))
+            && incoming().displayName is string && incoming().displayName.size() <= 200)
+        );
+
+      // On delete: only admin can delete
+      allow delete: if isSignedIn() && isAdmin();
+    }
+
+    // --- Stories Collection ---
+    match /stories/{storyId} {
+      allow read: if isSignedIn();
+
+      allow create: if isSignedIn()
+        && isValidId(storyId)
+        && incoming().id == storyId
+        && (incoming().authorId == request.auth.uid || isAdmin())
+        && (incoming().status in ["draft", "submitted", "reviewed"] || isAdmin())
+        && incoming().title is string && incoming().title.size() <= 300
+        && incoming().content is string && incoming().content.size() <= 10000;
+
+      // Update story:
+      // - The author can update their own story
+      // - Reviewers (teachers/BK) or Admin can update status/review
+      allow update: if isSignedIn()
+        && (
+          isAdmin()
+          || (resource != null && resource.data.authorId == request.auth.uid && incoming().authorId == request.auth.uid)
+          || (getUserRole(request.auth.uid) in ["guru_wali", "guru_bk"])
+        );
+
+      allow delete: if isSignedIn()
+        && (resource != null && resource.data.authorId == request.auth.uid || isAdmin());
+
+      // --- Feedbacks Subcollection ---
+      match /feedbacks/{feedbackId} {
+        allow read: if isSignedIn();
+        
+        allow create: if isSignedIn()
+          && isValidId(feedbackId)
+          && incoming().id == feedbackId
+          && incoming().storyId == storyId
+          && (incoming().reviewerId == request.auth.uid || isAdmin())
+          && (incoming().reviewerRole in ["guru_wali", "guru_bk"] || isAdmin())
+          && incoming().feedbackText is string && incoming().feedbackText.size() <= 3000
+          && incoming().stars is int && incoming().stars >= 1 && incoming().stars <= 5;
+
+        allow update, delete: if isSignedIn()
+          && (resource != null && resource.data.reviewerId == request.auth.uid || isAdmin());
+      }
+    }
+
+    // --- Habits Tracker Collection ---
+    match /habits/{habitId} {
+      // Students, Teachers, BK, and Admins can read habit logs
+      allow read: if isSignedIn();
+
+      // Student or Admin can create or update habits tracker
+      allow create: if isSignedIn()
+        && isValidId(habitId)
+        && incoming().id == habitId
+        && (incoming().studentId == request.auth.uid || isAdmin());
+
+      allow update: if isSignedIn()
+        && (resource == null || resource.data.studentId == request.auth.uid || isAdmin());
+
+      allow delete: if isSignedIn() && (resource == null || resource.data.studentId == request.auth.uid || isAdmin());
+    }
+  }
+}
