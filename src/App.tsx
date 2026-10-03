@@ -61,7 +61,11 @@ import {
   Check,
   Shield,
   Zap,
-  Mic
+  Mic,
+  Eye,
+  EyeOff,
+  Lock,
+  UserCheck
 } from 'lucide-react';
 
 // Types
@@ -369,6 +373,12 @@ export default function App() {
   // Registration states
   const [regRole, setRegRole] = useState<'guru_wali' | 'guru_non_wali' | 'murid' | 'guru_bk' | 'admin'>('guru_wali');
   const [regKelas, setRegKelas] = useState('7B, 7C');
+
+  // Username & Password Auth states
+  const [inputUsername, setInputUsername] = useState('');
+  const [inputPassword, setInputPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [loginError, setLoginError] = useState('');
 
   // Story states
   const [stories, setStories] = useState<Story[]>([]);
@@ -1034,6 +1044,126 @@ export default function App() {
     } as any);
     setUserProfile(demoTeacher);
     setActiveTab('classroom');
+  };
+
+  // Username & Password Login Handler
+  const handleUsernamePasswordLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoginError('');
+    const trimmedUser = inputUsername.trim().toLowerCase();
+    const trimmedPass = inputPassword.trim();
+
+    if (!trimmedUser || !trimmedPass) {
+      setLoginError('Harap isi username dan password Anda!');
+      return;
+    }
+
+    // 1. Preset credentials check
+    if (trimmedUser === 'guru1') {
+      if (trimmedPass === 'guru123') {
+        const guruProfile: UserProfile = {
+          uid: 'user_guru1',
+          displayName: 'I Sumayasa (Guru Wali)',
+          email: 'isumayasa91@guru.smp.belajar.id',
+          photoURL: 'https://api.dicebear.com/7.x/adventurer/svg?seed=guru1',
+          role: 'guru_wali',
+          kelas: '7B, 7C',
+          createdAt: Timestamp.now()
+        };
+        setCurrentUser({
+          uid: guruProfile.uid,
+          displayName: guruProfile.displayName,
+          email: guruProfile.email,
+          photoURL: guruProfile.photoURL
+        } as any);
+        setUserProfile(guruProfile);
+        setActiveTab('classroom');
+        setLoginError('');
+        return;
+      } else {
+        setLoginError('Password untuk username guru1 salah! (Gunakan: guru123)');
+        return;
+      }
+    }
+
+    if (trimmedUser === 'siswa7a') {
+      if (trimmedPass === '123456') {
+        const siswaProfile: UserProfile = {
+          uid: 'user_siswa7a',
+          displayName: 'Ahmad Fauzi (Siswa 7A)',
+          email: 'siswa7a@siswa.belajar.id',
+          photoURL: 'https://api.dicebear.com/7.x/adventurer/svg?seed=siswa7a',
+          role: 'murid',
+          kelas: '7A',
+          createdAt: Timestamp.now()
+        };
+        setCurrentUser({
+          uid: siswaProfile.uid,
+          displayName: siswaProfile.displayName,
+          email: siswaProfile.email,
+          photoURL: siswaProfile.photoURL
+        } as any);
+        setUserProfile(siswaProfile);
+        setActiveTab('gallery');
+        setLoginError('');
+        return;
+      } else {
+        setLoginError('Password untuk username siswa7a salah! (Gunakan: 123456)');
+        return;
+      }
+    }
+
+    if (trimmedUser === 'admin') {
+      if (trimmedPass === 'admin123') {
+        const adminProfile: UserProfile = {
+          uid: 'user_admin',
+          displayName: 'Administrator CERDAS',
+          email: 'admin@cerdas.smp.belajar.id',
+          photoURL: 'https://api.dicebear.com/7.x/adventurer/svg?seed=admin',
+          role: 'admin',
+          kelas: 'SEMUA',
+          createdAt: Timestamp.now()
+        };
+        setCurrentUser({
+          uid: adminProfile.uid,
+          displayName: adminProfile.displayName,
+          email: adminProfile.email,
+          photoURL: adminProfile.photoURL
+        } as any);
+        setUserProfile(adminProfile);
+        setActiveTab('admin');
+        setLoginError('');
+        return;
+      } else {
+        setLoginError('Password untuk username admin salah! (Gunakan: admin123)');
+        return;
+      }
+    }
+
+    // 2. Check dynamic users from loaded database if any
+    const matchedUser = Object.values(allUsers).find(
+      u => (u.email && u.email.toLowerCase().split('@')[0] === trimmedUser) || 
+           (u.displayName && u.displayName.toLowerCase().replace(/\s+/g, '') === trimmedUser)
+    );
+
+    if (matchedUser) {
+      if (trimmedPass === '123456' || trimmedPass === 'guru123' || trimmedPass === 'admin123') {
+        setCurrentUser({
+          uid: matchedUser.uid,
+          displayName: matchedUser.displayName,
+          email: matchedUser.email,
+          photoURL: matchedUser.photoURL
+        } as any);
+        setUserProfile(matchedUser);
+        if (matchedUser.role === 'murid') setActiveTab('gallery');
+        else if (matchedUser.role === 'admin') setActiveTab('admin');
+        else setActiveTab('classroom');
+        setLoginError('');
+        return;
+      }
+    }
+
+    setLoginError('Username tidak terdaftar! Silakan gunakan guru1, siswa7a, atau admin.');
   };
 
   const handleLogin = async () => {
@@ -2127,41 +2257,142 @@ export default function App() {
           </div>
         </div>
 
-        {/* Right Authentication Form */}
-        <div className="w-full max-w-md bg-white p-8 rounded-3xl shadow-xl border border-teal-50/50 flex flex-col items-center justify-center text-center space-y-6 relative overflow-hidden">
+        {/* Right Authentication Form with Username & Password */}
+        <div className="w-full max-w-md bg-white p-6 sm:p-8 rounded-3xl shadow-xl border border-teal-50/50 flex flex-col justify-center text-left space-y-5 relative overflow-hidden">
           <div className="absolute top-0 left-0 w-full h-3 bg-gradient-to-r from-teal-400 via-amber-300 to-rose-400"></div>
           
-          <div className="p-4 bg-teal-50 rounded-2xl">
-            <BookOpen className="w-12 h-12 text-teal-600" />
+          <div className="flex items-center gap-3">
+            <div className="p-3 bg-teal-50 rounded-2xl">
+              <BookOpen className="w-8 h-8 text-teal-600" />
+            </div>
+            <div>
+              <h2 className="text-xl font-extrabold text-slate-800">Masuk Akun CERDAS</h2>
+              <p className="text-xs text-slate-500">Masukkan Username & Password Anda</p>
+            </div>
           </div>
 
-          <div className="space-y-2">
-            <h2 className="text-2xl font-bold text-slate-800">Mulai Petualanganmu!</h2>
-            <p className="text-sm text-slate-500">Gunakan akun Google sekolah atau akun pribadi Anda</p>
-          </div>
+          {loginError && (
+            <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold rounded-xl flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 shrink-0 text-rose-500" />
+              <span>{loginError}</span>
+            </div>
+          )}
 
-          <button 
-            onClick={handleLogin}
-            className="w-full flex items-center justify-center gap-3 bg-white hover:bg-slate-50 text-slate-800 border border-slate-200 px-6 py-3.5 rounded-2xl font-semibold shadow-sm hover:shadow-md transition-all active:scale-95 duration-200"
-          >
-            <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24" fill="none">
-              <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4" />
-              <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
-              <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l3.66-2.85z" fill="#FBBC05" />
-              <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.85c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
-            </svg>
-            Masuk dengan Google
-          </button>
+          <form onSubmit={handleUsernamePasswordLogin} className="space-y-4">
+            {/* Username Input */}
+            <div className="space-y-1">
+              <label className="block text-xs font-bold text-slate-700">Username</label>
+              <div className="relative">
+                <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                  <User className="w-4 h-4" />
+                </span>
+                <input
+                  type="text"
+                  value={inputUsername}
+                  onChange={(e) => { setInputUsername(e.target.value); setLoginError(''); }}
+                  placeholder="Contoh: guru1 / siswa7a / admin"
+                  className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 focus:border-teal-500 focus:bg-white focus:ring-2 focus:ring-teal-200 rounded-xl text-xs font-medium text-slate-800 transition-all outline-none"
+                  required
+                />
+              </div>
+            </div>
 
-          <div className="pt-2 w-full space-y-2">
+            {/* Password Input with Show/Hide Toggle */}
+            <div className="space-y-1">
+              <label className="block text-xs font-bold text-slate-700">Password</label>
+              <div className="relative">
+                <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                  <Lock className="w-4 h-4" />
+                </span>
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  value={inputPassword}
+                  onChange={(e) => { setInputPassword(e.target.value); setLoginError(''); }}
+                  placeholder="Masukkan password"
+                  className="w-full pl-10 pr-10 py-2.5 bg-slate-50 border border-slate-200 focus:border-teal-500 focus:bg-white focus:ring-2 focus:ring-teal-200 rounded-xl text-xs font-medium text-slate-800 transition-all outline-none"
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-slate-600 transition-colors focus:outline-none"
+                  title={showPassword ? "Sembunyikan password" : "Tampilkan password"}
+                >
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+            </div>
+
             <button
-              onClick={handleDemoLogin}
-              className="w-full text-xs text-teal-700 hover:text-teal-900 font-bold py-2.5 px-4 rounded-xl bg-teal-50 hover:bg-teal-100 border border-teal-100 transition-colors"
+              type="submit"
+              className="w-full bg-teal-600 hover:bg-teal-700 text-white font-bold py-3 px-4 rounded-xl shadow-md hover:shadow-lg transition-all active:scale-98 duration-150 text-xs flex items-center justify-center gap-2"
             >
-              🚀 atau Coba Mode Demo Langsung (Tanpa Login)
+              <UserCheck className="w-4 h-4" />
+              Masuk Sekarang
+            </button>
+          </form>
+
+          {/* Quick Fill Preset Badges */}
+          <div className="space-y-2 pt-2 border-t border-slate-100">
+            <p className="text-[11px] font-bold text-slate-500 text-center">Petunjuk Kredensial Login Cepat:</p>
+            <div className="grid grid-cols-3 gap-1.5 text-[11px]">
+              <button
+                type="button"
+                onClick={() => {
+                  setInputUsername('guru1');
+                  setInputPassword('guru123');
+                  setLoginError('');
+                }}
+                className="p-2 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-xl text-emerald-800 font-semibold text-center transition-colors"
+              >
+                👩‍🏫 <strong>Guru</strong>
+                <span className="block text-[10px] text-emerald-600 font-mono">guru1 / guru123</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setInputUsername('siswa7a');
+                  setInputPassword('123456');
+                  setLoginError('');
+                }}
+                className="p-2 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-xl text-blue-800 font-semibold text-center transition-colors"
+              >
+                🎒 <strong>Siswa</strong>
+                <span className="block text-[10px] text-blue-600 font-mono">siswa7a / 123456</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setInputUsername('admin');
+                  setInputPassword('admin123');
+                  setLoginError('');
+                }}
+                className="p-2 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-xl text-purple-800 font-semibold text-center transition-colors"
+              >
+                ⚡ <strong>Admin</strong>
+                <span className="block text-[10px] text-purple-600 font-mono">admin / admin123</span>
+              </button>
+            </div>
+          </div>
+
+          <div className="pt-2 w-full space-y-2 text-center">
+            <button 
+              type="button"
+              onClick={handleLogin}
+              className="w-full flex items-center justify-center gap-2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 py-2.5 rounded-xl font-semibold text-xs shadow-2xs hover:shadow-xs transition-all"
+            >
+              <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none">
+                <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4" />
+                <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
+                <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l3.66-2.85z" fill="#FBBC05" />
+                <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.85c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
+              </svg>
+              Atau Masuk via Google Sign-In
             </button>
             <p className="text-[11px] text-slate-400">
-              Aman • Terintegrasi dengan Google AI Studio & Firebase
+              Aman • Aplikasi CERDAS - Literasi Hebat Indonesia Unggul
             </p>
           </div>
         </div>
