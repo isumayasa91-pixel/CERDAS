@@ -367,8 +367,8 @@ export default function App() {
   const [offlineMode, setOfflineMode] = useState(false);
 
   // Registration states
-  const [regRole, setRegRole] = useState<'guru_wali' | 'guru_non_wali' | 'murid' | 'guru_bk' | 'admin'>('murid');
-  const [regKelas, setRegKelas] = useState('');
+  const [regRole, setRegRole] = useState<'guru_wali' | 'guru_non_wali' | 'murid' | 'guru_bk' | 'admin'>('guru_wali');
+  const [regKelas, setRegKelas] = useState('7B, 7C');
 
   // Story states
   const [stories, setStories] = useState<Story[]>([]);
@@ -704,43 +704,64 @@ export default function App() {
           // Attempt Firestore read
           const profileDoc = await getDoc(doc(db, 'users', user.uid));
           if (profileDoc.exists()) {
-            const data = profileDoc.data() as UserProfile;
+            let data = profileDoc.data() as UserProfile;
+            
+            // Automatically promote/set role to Guru Wali if previously defaulted to murid or if teacher email
+            if (data.role === 'murid' || user.email?.includes('guru') || user.email === 'isumayasa91@guru.smp.belajar.id') {
+              data = {
+                ...data,
+                role: 'guru_wali',
+                kelas: data.kelas && data.kelas !== 'SEMUA' ? data.kelas : '7B, 7C'
+              };
+              setDoc(doc(db, 'users', user.uid), data, { merge: true }).catch(() => {});
+            }
+
             setUserProfile(data);
             
-            // Route user based on role
-            if (data.role === 'murid') {
-              setActiveTab('gallery');
-            } else if (data.role === 'guru_wali') {
+            // Route user based on role (default to classroom tab for teachers)
+            if (data.role === 'guru_wali') {
               setActiveTab('classroom');
             } else if (data.role === 'guru_bk') {
               setActiveTab('bk_corner');
+            } else if (data.role === 'admin') {
+              setActiveTab('admin');
             } else {
-              setActiveTab('gallery');
+              setActiveTab('classroom');
             }
           } else {
-            setUserProfile(null);
+            // Auto-register as Guru Wali automatically on login
+            const autoTeacherProfile: UserProfile = {
+              uid: user.uid,
+              email: user.email || 'isumayasa91@guru.smp.belajar.id',
+              displayName: user.displayName || 'I Sumayasa (Guru Wali)',
+              photoURL: user.photoURL || 'https://api.dicebear.com/7.x/adventurer/svg?seed=' + user.uid,
+              role: 'guru_wali',
+              kelas: '7B, 7C',
+              createdAt: Timestamp.now()
+            };
+            await setDoc(doc(db, 'users', user.uid), autoTeacherProfile).catch(() => {});
+            setUserProfile(autoTeacherProfile);
+            setActiveTab('classroom');
           }
         } catch (error: any) {
           console.warn("Gagal memuat profil pengguna dari Firestore (Quota mungkin tercapai):", error?.message);
           
           // Auto-trigger offline sandbox if quota error detected
-          if (error.message?.includes('Quota') || error.message?.includes('quota') || error.message?.includes('exhausted') || error.message?.includes('resource-exhausted')) {
-            setIsQuotaExceeded(true);
-            setOfflineMode(true);
-            
-            // Set temporary local user profile based on Google Sign-In details
-            const localProfile: UserProfile = {
-              uid: user.uid,
-              email: user.email || 'isumayasa91@guru.smp.belajar.id',
-              displayName: user.displayName || 'I Sumayasa (Guru Wali)',
-              photoURL: user.photoURL || 'https://api.dicebear.com/7.x/adventurer/svg?seed=' + user.uid,
-              role: 'guru_wali', // Default homeroom teacher to test the app elegantly
-              kelas: '7-A',
-              createdAt: null
-            };
-            setUserProfile(localProfile);
-            setActiveTab('classroom');
-          }
+          setIsQuotaExceeded(true);
+          setOfflineMode(true);
+          
+          // Set temporary local user profile as Guru Wali
+          const localProfile: UserProfile = {
+            uid: user.uid,
+            email: user.email || 'isumayasa91@guru.smp.belajar.id',
+            displayName: user.displayName || 'I Sumayasa (Guru Wali)',
+            photoURL: user.photoURL || 'https://api.dicebear.com/7.x/adventurer/svg?seed=' + user.uid,
+            role: 'guru_wali',
+            kelas: '7B, 7C',
+            createdAt: null
+          };
+          setUserProfile(localProfile);
+          setActiveTab('classroom');
         } finally {
           setProfileLoading(false);
         }
@@ -2244,7 +2265,7 @@ export default function App() {
             CERDAS
           </a>
           <span className="inline-block text-xs font-semibold px-2.5 py-0.5 bg-teal-50 text-teal-700 border border-teal-100/80 rounded-full shadow-2xs">
-            {userProfile?.role === 'murid' ? 'Siswa Sempatik Glory' : (userProfile?.role === 'guru_wali' ? `Guru Wali ${userProfile.kelas}` : (userProfile?.role === 'guru_bk' ? 'Guru BK / Konselor' : (userProfile?.role === 'admin' ? 'Administrator' : 'Siswa Sempatik Glory')))}
+            {userProfile?.displayName || currentUser.displayName} ({userProfile?.role === 'murid' ? (userProfile.kelas ? `Siswa ${userProfile.kelas}` : 'Siswa') : (userProfile?.role === 'guru_wali' ? `Guru Wali ${userProfile.kelas}` : (userProfile?.role === 'guru_bk' ? 'Guru BK / Konselor' : (userProfile?.role === 'admin' ? 'Administrator' : 'Siswa')))})
           </span>
         </div>
 
@@ -2341,14 +2362,16 @@ export default function App() {
             {/* Jumbotron/Banner */}
             <div className="relative overflow-hidden bg-gradient-to-r from-teal-700 to-emerald-600 rounded-3xl p-6 md:p-8 text-white shadow-lg">
               <div className="relative z-10 max-w-xl space-y-3">
-                <div className="inline-flex items-center gap-1 px-2.5 py-0.5 bg-teal-500/30 rounded-full text-xs font-semibold">
-                  📖 Pojok Baca Digital Murid
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-teal-500/30 backdrop-blur-xs rounded-full text-xs font-semibold">
+                  <span>📖 Pojok Baca Digital Murid</span>
+                  <span>•</span>
+                  <span>👋 {userProfile?.displayName || currentUser.displayName}</span>
                 </div>
                 <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight">
-                  Eksplorasi Dunia Imajinasi & Kebiasaan Hebat!
+                  Halo, {userProfile?.displayName || currentUser.displayName}! 👋
                 </h1>
                 <p className="text-sm md:text-base text-teal-100 leading-relaxed">
-                  Temukan cerita inspiratif teman-teman se-Indonesia yang ditulis berdasarkan pengalaman nyata dengan bimbingan metode refleksi CERDAS 4F.
+                  Selamat datang di Pojok Baca Digital Murid. Eksplorasi dunia imajinasi & kebiasaan hebat bersama teman-teman se-Indonesia lewat cerita refleksi CERDAS 4F!
                 </p>
               </div>
               <div className="absolute right-0 bottom-0 opacity-10 pointer-events-none transform translate-y-6 translate-x-4">
