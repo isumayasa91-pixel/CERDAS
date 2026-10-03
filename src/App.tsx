@@ -161,6 +161,27 @@ function getCuteFallbackBackground(theme: string) {
   return gradients[index];
 }
 
+// Helper to normalize and match student class with teacher's assigned class(es), e.g. "7B, 7C" or "7A, 7B" or "SEMUA"
+export const isTeacherClassMatch = (teacherKelasString: string | undefined, studentKelas: string | undefined): boolean => {
+  if (!teacherKelasString || !studentKelas) return false;
+  const tk = teacherKelasString.trim().toUpperCase();
+  const sk = studentKelas.trim().toUpperCase();
+  
+  if (tk === 'SEMUA' || sk === 'SEMUA') return true;
+
+  const normalize = (k: string) => {
+    let str = k.toUpperCase().replace(/^KELAS\s+/, '').trim();
+    str = str.replace(/VII/g, '7').replace(/VIII/g, '8').replace(/IX/g, '9');
+    str = str.replace(/[-\s]/g, ''); // "7-B" -> "7B"
+    return str;
+  };
+
+  const target = normalize(sk);
+  const teacherClasses = tk.split(',').map(normalize).filter(Boolean);
+
+  return teacherClasses.some(tc => tc === target || target.includes(tc) || tc.includes(target));
+};
+
 // PREMIUM OFFLINE MOCK DATA (Gives a stellar testing state during Firestore limit block)
 const MOCK_STORIES: Story[] = [
   {
@@ -366,6 +387,7 @@ export default function App() {
 
   // Selected story for detail modal
   const [selectedStory, setSelectedStory] = useState<Story | null>(null);
+  const [selectedTeacherClassFilter, setSelectedTeacherClassFilter] = useState<string>('Semua');
   const [newFeedbackText, setNewFeedbackText] = useState('');
   const [newFeedbackStars, setNewFeedbackStars] = useState(5);
   const [submittingFeedback, setSubmittingFeedback] = useState(false);
@@ -2108,16 +2130,22 @@ export default function App() {
               {/* Class Designation (Only for Murid and Guru Wali) */}
               {(regRole === 'murid' || regRole === 'guru_wali') && (
                 <div className="space-y-2 animate-fadeIn">
-                  <label className="block text-sm font-bold text-slate-700">Tingkat Kelas & Ruang:</label>
+                  <label className="block text-sm font-bold text-slate-700">
+                    {regRole === 'guru_wali' ? 'Kelas Binaan Guru Wali (Boleh >1 Kelas):' : 'Tingkat Kelas & Ruang:'}
+                  </label>
                   <input
                     type="text"
                     required
-                    placeholder="Contoh: VII-A, VIII-B, IX-C, X-E"
+                    placeholder={regRole === 'guru_wali' ? "Contoh: 7B, 7C (Pisahkan koma jika >1 kelas)" : "Contoh: VII-A atau 7B"}
                     value={regKelas}
                     onChange={(e) => setRegKelas(e.target.value)}
                     className="w-full border border-slate-200 px-4 py-3 rounded-2xl focus:outline-none focus:ring-2 focus:ring-teal-400 focus:border-transparent text-sm"
                   />
-                  <p className="text-xs text-slate-400">Kelas akan mengelompokkan murid dengan guru walinya secara otomatis.</p>
+                  <p className="text-xs text-slate-400">
+                    {regRole === 'guru_wali'
+                      ? '💡 Guru wali yang membina lebih dari 1 kelas dapat mengetik kelas dipisahkan koma (contoh: 7A, 7B atau 7B, 7C).'
+                      : 'Kelas akan mengelompokkan murid dengan guru walinya secara otomatis.'}
+                  </p>
                 </div>
               )}
 
@@ -2481,14 +2509,29 @@ export default function App() {
                         </div>
 
                         <div className="pt-2 border-t border-slate-50 flex items-center justify-between text-[11px] text-slate-500">
-                          <div className="flex items-center gap-1 truncate max-w-[150px]">
+                          <div className="flex items-center gap-1 truncate max-w-[140px]">
                             <span className="font-bold text-slate-700">{story.authorName}</span>
                             <span>·</span>
                             <span>Kelas {story.authorKelas}</span>
                           </div>
-                          <span>
-                            {story.createdAt?.seconds ? new Date(story.createdAt.seconds * 1000).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' }) : 'Hari ini'}
-                          </span>
+                          <div className="flex items-center gap-1.5">
+                            <span>
+                              {story.createdAt?.seconds ? new Date(story.createdAt.seconds * 1000).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' }) : 'Hari ini'}
+                            </span>
+                            {(story.authorId === currentUser?.uid || userProfile?.role === 'admin' || userProfile?.role === 'guru_wali' || userProfile?.role === 'guru_bk' || offlineMode) && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDeleteStory(story.id);
+                                }}
+                                title="Hapus Cerita"
+                                className="p-1 hover:bg-rose-50 text-slate-400 hover:text-rose-600 rounded-lg transition-colors"
+                              >
+                                🗑️
+                              </button>
+                            )}
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -3206,7 +3249,11 @@ export default function App() {
         {/* ======================================= */}
         {/* TAB 4: HOMEROOM TEACHER DASHBOARD */}
         {/* ======================================= */}
-        {activeTab === 'classroom' && userProfile?.role === 'guru_wali' && (
+        {activeTab === 'classroom' && userProfile?.role === 'guru_wali' && (() => {
+          const teacherClassesList = userProfile.kelas ? userProfile.kelas.split(',').map(c => c.trim().toUpperCase()).filter(Boolean) : [];
+          const activeClassFilter = selectedTeacherClassFilter === 'Semua' ? userProfile.kelas : selectedTeacherClassFilter;
+
+          return (
           <div className="space-y-6">
             
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -3214,6 +3261,22 @@ export default function App() {
                 <h1 className="text-3xl font-extrabold text-teal-800">Ruang Kelas {userProfile.kelas} 👩‍🏫</h1>
                 <p className="text-slate-500 text-sm">Kelola progres literasi siswa, pantau kebiasaan baik harian, dan berikan ulasan cerita mereka.</p>
               </div>
+
+              {teacherClassesList.length > 1 && (
+                <div className="flex items-center gap-2 bg-white px-4 py-2.5 rounded-2xl border border-slate-200 shadow-2xs">
+                  <span className="text-xs font-bold text-slate-500">Filter Kelas Binaan:</span>
+                  <select
+                    value={selectedTeacherClassFilter}
+                    onChange={(e) => setSelectedTeacherClassFilter(e.target.value)}
+                    className="bg-slate-50 border border-slate-200 text-teal-800 font-extrabold text-xs px-3 py-1.5 rounded-xl focus:outline-none cursor-pointer"
+                  >
+                    <option value="Semua">✨ Semua Kelas Binaan ({userProfile.kelas})</option>
+                    {teacherClassesList.map(c => (
+                      <option key={c} value={c}>Kelas {c}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -3225,7 +3288,7 @@ export default function App() {
                 <div>
                   <span className="text-[10px] text-slate-400 block font-bold uppercase tracking-wider">Total Cerita Siswa</span>
                   <span className="text-2xl font-extrabold text-slate-800">
-                    {stories.filter(s => s.authorKelas === userProfile.kelas).length} Cerita
+                    {stories.filter(s => isTeacherClassMatch(activeClassFilter, s.authorKelas)).length} Cerita
                   </span>
                 </div>
               </div>
@@ -3237,7 +3300,7 @@ export default function App() {
                 <div>
                   <span className="text-[10px] text-slate-400 block font-bold uppercase tracking-wider">Menunggu Ulasan</span>
                   <span className="text-2xl font-extrabold text-slate-800">
-                    {stories.filter(s => s.authorKelas === userProfile.kelas && s.status === 'submitted').length} Kisah
+                    {stories.filter(s => isTeacherClassMatch(activeClassFilter, s.authorKelas) && s.status === 'submitted').length} Kisah
                   </span>
                 </div>
               </div>
@@ -3250,9 +3313,9 @@ export default function App() {
                   <span className="text-[10px] text-slate-400 block font-bold uppercase tracking-wider">Indeks Kebiasaan Kelas</span>
                   <span className="text-2xl font-extrabold text-slate-800">
                     {Math.round(
-                      habitLogs.filter(l => l.studentKelas === userProfile.kelas).length > 0
+                      habitLogs.filter(l => isTeacherClassMatch(activeClassFilter, l.studentKelas)).length > 0
                         ? habitLogs
-                            .filter(l => l.studentKelas === userProfile.kelas)
+                            .filter(l => isTeacherClassMatch(activeClassFilter, l.studentKelas))
                             .reduce((acc, curr) => {
                               let ticks = 0;
                               if (curr.bangun_pagi) ticks++;
@@ -3263,7 +3326,7 @@ export default function App() {
                               if (curr.bermasyarakat) ticks++;
                               if (curr.tidur_cepat) ticks++;
                               return acc + (ticks / 7);
-                            }, 0) / habitLogs.filter(l => l.studentKelas === userProfile.kelas).length * 100
+                            }, 0) / habitLogs.filter(l => isTeacherClassMatch(activeClassFilter, l.studentKelas)).length * 100
                         : 0
                     )}%
                   </span>
@@ -3278,14 +3341,14 @@ export default function App() {
                 <h3 className="font-bold text-slate-800 text-base">Kotak Masuk Cerita Kelas</h3>
                 <p className="text-xs text-slate-400">Bacalah refleksi murid dan berikan bimbingan serta apresiasi bintang yang memotivasi.</p>
                 
-                {stories.filter(s => s.authorKelas === userProfile.kelas).length === 0 ? (
+                {stories.filter(s => isTeacherClassMatch(activeClassFilter, s.authorKelas)).length === 0 ? (
                   <div className="p-12 text-center text-slate-400 italic text-sm">
-                    Belum ada siswa di kelas Anda yang memublikasikan cerita.
+                    Belum ada siswa di kelas Anda ({activeClassFilter}) yang memublikasikan cerita.
                   </div>
                 ) : (
                   <div className="space-y-3 pt-2">
                     {stories
-                      .filter(s => s.authorKelas === userProfile.kelas)
+                      .filter(s => isTeacherClassMatch(activeClassFilter, s.authorKelas))
                       .map(story => (
                         <div
                           key={story.id}
@@ -3295,6 +3358,8 @@ export default function App() {
                           <div className="space-y-1 max-w-lg">
                             <div className="flex items-center gap-2">
                               <span className="text-xs font-bold text-slate-700">{story.authorName}</span>
+                              <span className="text-xs text-slate-400">·</span>
+                              <span className="text-[10px] font-bold bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded-md">Kelas {story.authorKelas}</span>
                               <span className="text-xs text-slate-400">·</span>
                               <span className="text-[10px] text-slate-400">
                                 {story.createdAt?.seconds ? new Date(story.createdAt.seconds * 1000).toLocaleDateString('id-ID') : 'Hari ini'}
@@ -3313,6 +3378,17 @@ export default function App() {
                             ) : (
                               <span className="bg-slate-100 text-slate-500 font-extrabold text-[9px] px-2 py-0.5 rounded-md uppercase tracking-wider">Selesai Ulas</span>
                             )}
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeleteStory(story.id);
+                              }}
+                              title="Hapus Cerita"
+                              className="p-1 hover:bg-rose-50 text-slate-400 hover:text-rose-600 rounded-lg transition-colors"
+                            >
+                              🗑️
+                            </button>
                             <ChevronRight className="w-4 h-4 text-slate-400" />
                           </div>
                         </div>
@@ -3327,7 +3403,7 @@ export default function App() {
 
                 <div className="space-y-3 pt-2">
                   {Object.values(allUsers)
-                    .filter(u => u.role === 'murid' && u.kelas === userProfile.kelas)
+                    .filter(u => u.role === 'murid' && isTeacherClassMatch(activeClassFilter, u.kelas))
                     .map(student => {
                       const stats = getStudentHabitStats(student.uid);
                       return (
@@ -3336,7 +3412,7 @@ export default function App() {
                             <img src={student.photoURL} alt={student.displayName} className="w-8 h-8 rounded-full" />
                             <div className="truncate max-w-[120px]">
                               <span className="text-xs font-bold text-slate-800 block truncate">{student.displayName}</span>
-                              <span className="text-[10px] text-slate-400 block">{stats.count} hari tercatat</span>
+                              <span className="text-[10px] text-slate-400 block">Kelas {student.kelas} · {stats.count} hari</span>
                             </div>
                           </div>
 
@@ -3350,8 +3426,8 @@ export default function App() {
                       );
                     })}
                   
-                  {Object.values(allUsers).filter(u => u.role === 'murid' && u.kelas === userProfile.kelas).length === 0 && (
-                    <p className="text-xs text-slate-400 italic text-center py-4">Belum ada murid terdaftar di kelas Anda.</p>
+                  {Object.values(allUsers).filter(u => u.role === 'murid' && isTeacherClassMatch(activeClassFilter, u.kelas)).length === 0 && (
+                    <p className="text-xs text-slate-400 italic text-center py-4">Belum ada murid terdaftar di kelas Anda ({activeClassFilter}).</p>
                   )}
                 </div>
               </div>
@@ -3359,7 +3435,8 @@ export default function App() {
             </div>
 
           </div>
-        )}
+          );
+        })()}
 
         {/* ======================================= */}
         {/* TAB 5: GUIDANCE COUNSELOR (BK) CORNER */}
@@ -3710,15 +3787,20 @@ export default function App() {
 
                       {(adminNewUserRole === 'murid' || adminNewUserRole === 'guru_wali') && (
                         <div className="space-y-1 animate-fadeIn">
-                          <label className="block text-xs font-bold text-slate-600">Penugasan Kelas:</label>
+                          <label className="block text-xs font-bold text-slate-600">
+                            {adminNewUserRole === 'guru_wali' ? 'Penugasan Kelas Binaan (Boleh >1 Kelas):' : 'Penugasan Kelas Siswa:'}
+                          </label>
                           <input
                             type="text"
                             required
-                            placeholder="Contoh: VII-A, VIII-B, IX-C, X-E"
+                            placeholder={adminNewUserRole === 'guru_wali' ? "Contoh: 7B, 7C (Pisahkan koma jika >1 kelas)" : "Contoh: VII-A atau 7B"}
                             value={adminNewUserKelas}
                             onChange={(e) => setAdminNewUserKelas(e.target.value)}
                             className="w-full border border-slate-200 px-3.5 py-2.5 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-400 text-xs font-medium text-slate-700"
                           />
+                          {adminNewUserRole === 'guru_wali' && (
+                            <p className="text-[10px] text-indigo-600 font-medium">💡 Untuk guru binaan lebih dari 1 kelas, pisahkan dengan koma (contoh: 7B, 7C).</p>
+                          )}
                         </div>
                       )}
 
@@ -3822,10 +3904,11 @@ export default function App() {
                               />
                             </div>
                             <div className="space-y-1">
-                              <span className="text-[10px] font-bold text-slate-500 block">KELAS BINAAN:</span>
+                              <span className="text-[10px] font-bold text-slate-500 block">KELAS BINAAN (Pisahkan koma jika lebih dari 1 kelas):</span>
                               <input
                                 type="text"
                                 value={editUserKelas}
+                                placeholder="Contoh: 7B, 7C"
                                 onChange={(e) => setEditUserKelas(e.target.value)}
                                 className="bg-white border border-slate-200 p-2 rounded-lg w-full font-extrabold text-indigo-700"
                               />
@@ -4198,12 +4281,26 @@ export default function App() {
                 <BookOpen className="w-5 h-5 text-teal-600" />
                 <span className="text-sm font-bold text-slate-700">Digital Book Reader CERDAS</span>
               </div>
-              <button 
-                onClick={() => setSelectedStory(null)}
-                className="text-slate-400 hover:text-slate-700 font-bold text-sm"
-              >
-                Tutup (✕)
-              </button>
+              <div className="flex items-center gap-3">
+                {(selectedStory.authorId === currentUser?.uid || userProfile?.role === 'admin' || userProfile?.role === 'guru_wali' || userProfile?.role === 'guru_bk' || offlineMode) && (
+                  <button
+                    onClick={() => {
+                      const idToDelete = selectedStory.id;
+                      setSelectedStory(null);
+                      handleDeleteStory(idToDelete);
+                    }}
+                    className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-colors shadow-2xs"
+                  >
+                    <span>🗑️ Hapus Cerita</span>
+                  </button>
+                )}
+                <button 
+                  onClick={() => setSelectedStory(null)}
+                  className="text-slate-400 hover:text-slate-700 font-bold text-sm"
+                >
+                  Tutup (✕)
+                </button>
+              </div>
             </div>
 
             <div className="p-6 md:p-8 space-y-8 flex-1">
