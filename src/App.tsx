@@ -700,68 +700,99 @@ export default function App() {
       setCurrentUser(user);
       if (user) {
         setProfileLoading(true);
+        const userEmail = (user.email || '').toLowerCase();
+        const isStudentEmail = userEmail.includes('siswa') || userEmail.includes('murid') || userEmail.includes('@siswa.');
+        const isTeacherEmail = userEmail.includes('guru') || userEmail.includes('admin') || userEmail === 'isumayasa91@guru.smp.belajar.id';
+
         try {
           // Attempt Firestore read
           const profileDoc = await getDoc(doc(db, 'users', user.uid));
           if (profileDoc.exists()) {
             let data = profileDoc.data() as UserProfile;
             
-            // Automatically promote/set role to Guru Wali if previously defaulted to murid or if teacher email
-            if (data.role === 'murid' || user.email?.includes('guru') || user.email === 'isumayasa91@guru.smp.belajar.id') {
-              data = {
-                ...data,
-                role: 'guru_wali',
-                kelas: data.kelas && data.kelas !== 'SEMUA' ? data.kelas : '7B, 7C'
-              };
+            // Adjust role automatically if email pattern specifically matches
+            if (isStudentEmail) {
+              data = { ...data, role: 'murid' };
+            } else if (isTeacherEmail && data.role === 'murid') {
+              data = { ...data, role: 'guru_wali', kelas: data.kelas && data.kelas !== 'SEMUA' ? data.kelas : '7B, 7C' };
               setDoc(doc(db, 'users', user.uid), data, { merge: true }).catch(() => {});
             }
 
             setUserProfile(data);
             
-            // Route user based on role (default to classroom tab for teachers)
-            if (data.role === 'guru_wali') {
-              setActiveTab('classroom');
+            // Route user automatically based on role:
+            if (data.role === 'murid') {
+              setActiveTab('gallery'); // Menu Murid / Galeri Cerita
+            } else if (data.role === 'guru_wali') {
+              setActiveTab('classroom'); // Menu Guru Wali / Ruang Kelas
             } else if (data.role === 'guru_bk') {
-              setActiveTab('bk_corner');
+              setActiveTab('bk_corner'); // Menu Guru BK
             } else if (data.role === 'admin') {
-              setActiveTab('admin');
+              setActiveTab('admin'); // Menu Admin
             } else {
-              setActiveTab('classroom');
+              setActiveTab('gallery');
             }
           } else {
-            // Auto-register as Guru Wali automatically on login
-            const autoTeacherProfile: UserProfile = {
+            // Auto-register based on user email role
+            if (isStudentEmail) {
+              const autoStudentProfile: UserProfile = {
+                uid: user.uid,
+                email: user.email || '',
+                displayName: user.displayName || 'Siswa CERDAS',
+                photoURL: user.photoURL || 'https://api.dicebear.com/7.x/adventurer/svg?seed=' + user.uid,
+                role: 'murid',
+                kelas: '7B',
+                createdAt: Timestamp.now()
+              };
+              await setDoc(doc(db, 'users', user.uid), autoStudentProfile).catch(() => {});
+              setUserProfile(autoStudentProfile);
+              setActiveTab('gallery'); // Menu Murid
+            } else {
+              const autoTeacherProfile: UserProfile = {
+                uid: user.uid,
+                email: user.email || 'isumayasa91@guru.smp.belajar.id',
+                displayName: user.displayName || 'I Sumayasa (Guru Wali)',
+                photoURL: user.photoURL || 'https://api.dicebear.com/7.x/adventurer/svg?seed=' + user.uid,
+                role: 'guru_wali',
+                kelas: '7B, 7C',
+                createdAt: Timestamp.now()
+              };
+              await setDoc(doc(db, 'users', user.uid), autoTeacherProfile).catch(() => {});
+              setUserProfile(autoTeacherProfile);
+              setActiveTab('classroom'); // Menu Guru
+            }
+          }
+        } catch (error: any) {
+          console.warn("Gagal memuat profil pengguna dari Firestore (Quota mungkin tercapai):", error?.message);
+          
+          setIsQuotaExceeded(true);
+          setOfflineMode(true);
+          
+          if (isStudentEmail) {
+            const localStudentProfile: UserProfile = {
+              uid: user.uid,
+              email: user.email || 'siswa@siswa.belajar.id',
+              displayName: user.displayName || 'Siswa CERDAS',
+              photoURL: user.photoURL || 'https://api.dicebear.com/7.x/adventurer/svg?seed=' + user.uid,
+              role: 'murid',
+              kelas: '7B',
+              createdAt: null
+            };
+            setUserProfile(localStudentProfile);
+            setActiveTab('gallery');
+          } else {
+            const localProfile: UserProfile = {
               uid: user.uid,
               email: user.email || 'isumayasa91@guru.smp.belajar.id',
               displayName: user.displayName || 'I Sumayasa (Guru Wali)',
               photoURL: user.photoURL || 'https://api.dicebear.com/7.x/adventurer/svg?seed=' + user.uid,
               role: 'guru_wali',
               kelas: '7B, 7C',
-              createdAt: Timestamp.now()
+              createdAt: null
             };
-            await setDoc(doc(db, 'users', user.uid), autoTeacherProfile).catch(() => {});
-            setUserProfile(autoTeacherProfile);
+            setUserProfile(localProfile);
             setActiveTab('classroom');
           }
-        } catch (error: any) {
-          console.warn("Gagal memuat profil pengguna dari Firestore (Quota mungkin tercapai):", error?.message);
-          
-          // Auto-trigger offline sandbox if quota error detected
-          setIsQuotaExceeded(true);
-          setOfflineMode(true);
-          
-          // Set temporary local user profile as Guru Wali
-          const localProfile: UserProfile = {
-            uid: user.uid,
-            email: user.email || 'isumayasa91@guru.smp.belajar.id',
-            displayName: user.displayName || 'I Sumayasa (Guru Wali)',
-            photoURL: user.photoURL || 'https://api.dicebear.com/7.x/adventurer/svg?seed=' + user.uid,
-            role: 'guru_wali',
-            kelas: '7B, 7C',
-            createdAt: null
-          };
-          setUserProfile(localProfile);
-          setActiveTab('classroom');
         } finally {
           setProfileLoading(false);
         }
@@ -953,30 +984,38 @@ export default function App() {
     loadHabit();
   }, [currentUser, userProfile, selectedDate, offlineMode, habitLogs]);
 
+  const handleDemoLogin = () => {
+    setIsQuotaExceeded(true);
+    setOfflineMode(true);
+    const demoTeacher: UserProfile = {
+      uid: 'mock_user_1',
+      displayName: 'I Sumayasa (Guru Wali)',
+      email: 'isumayasa91@guru.smp.belajar.id',
+      photoURL: 'https://api.dicebear.com/7.x/adventurer/svg?seed=isumayasa',
+      role: 'guru_wali',
+      kelas: '7B, 7C',
+      createdAt: null
+    };
+    setCurrentUser({
+      uid: demoTeacher.uid,
+      displayName: demoTeacher.displayName,
+      email: demoTeacher.email,
+      photoURL: demoTeacher.photoURL
+    } as any);
+    setUserProfile(demoTeacher);
+    setActiveTab('classroom');
+  };
+
   const handleLogin = async () => {
     try {
       await signInWithPopup(auth, googleProvider);
-    } catch (error) {
-      console.error("Gagal masuk dengan Google:", error);
-      // Fallback to manual offline login
-      setIsQuotaExceeded(true);
-      setOfflineMode(true);
-      setCurrentUser({
-        uid: 'mock_user_1',
-        displayName: 'I Sumayasa (Demo)',
-        email: 'isumayasa91@guru.smp.belajar.id',
-        photoURL: 'https://api.dicebear.com/7.x/adventurer/svg?seed=isumayasa'
-      } as any);
-      setUserProfile({
-        uid: 'mock_user_1',
-        displayName: 'I Sumayasa (Demo)',
-        email: 'isumayasa91@guru.smp.belajar.id',
-        photoURL: 'https://api.dicebear.com/7.x/adventurer/svg?seed=isumayasa',
-        role: 'guru_bk',
-        kelas: 'SEMUA',
-        createdAt: null
-      });
-      setActiveTab('bk_corner');
+    } catch (error: any) {
+      if (error?.code === 'auth/popup-closed-by-user' || error?.code === 'auth/cancelled-popup-request') {
+        console.info("Jendela masuk Google ditutup oleh pengguna.");
+        return;
+      }
+      console.warn("Gagal masuk dengan Google:", error?.message || error);
+      handleDemoLogin();
     }
   };
 
@@ -2084,9 +2123,17 @@ export default function App() {
             Masuk dengan Google
           </button>
 
-          <p className="text-xs text-slate-400">
-            Aman • Terintegrasi dengan Google AI Studio & Firebase
-          </p>
+          <div className="pt-2 w-full space-y-2">
+            <button
+              onClick={handleDemoLogin}
+              className="w-full text-xs text-teal-700 hover:text-teal-900 font-bold py-2.5 px-4 rounded-xl bg-teal-50 hover:bg-teal-100 border border-teal-100 transition-colors"
+            >
+              🚀 atau Coba Mode Demo Langsung (Tanpa Login)
+            </button>
+            <p className="text-[11px] text-slate-400">
+              Aman • Terintegrasi dengan Google AI Studio & Firebase
+            </p>
+          </div>
         </div>
       </div>
     );
