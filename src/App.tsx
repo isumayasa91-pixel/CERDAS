@@ -810,6 +810,11 @@ export default function App() {
 
     // Load users
     const usersUnsubscribe = onSnapshot(collection(db, 'users'), (snapshot) => {
+      if (snapshot.empty) {
+        Object.values(MOCK_USERS).forEach((u) => {
+          setDoc(doc(db, 'users', u.uid), { ...u, createdAt: Timestamp.now() }).catch(() => {});
+        });
+      }
       const usersMap: { [uid: string]: UserProfile } = {};
       snapshot.forEach((doc) => {
         usersMap[doc.id] = doc.data() as UserProfile;
@@ -824,6 +829,15 @@ export default function App() {
     // Realtime stories
     let storiesQuery = query(collection(db, 'stories'), orderBy('createdAt', 'desc'));
     const storiesUnsubscribe = onSnapshot(storiesQuery, (snapshot) => {
+      if (snapshot.empty) {
+        MOCK_STORIES.forEach((st) => {
+          setDoc(doc(db, 'stories', st.id), {
+            ...st,
+            createdAt: Timestamp.now(),
+            updatedAt: Timestamp.now()
+          }).catch(() => {});
+        });
+      }
       const storiesList: Story[] = [];
       snapshot.forEach((doc) => {
         storiesList.push({ id: doc.id, ...doc.data() } as Story);
@@ -844,6 +858,14 @@ export default function App() {
     }
 
     const habitsUnsubscribe = onSnapshot(habitsQuery, (snapshot) => {
+      if (snapshot.empty && userProfile?.role !== 'murid') {
+        MOCK_HABITS.forEach((hb) => {
+          setDoc(doc(db, 'habits', hb.id), {
+            ...hb,
+            updatedAt: Timestamp.now()
+          }).catch(() => {});
+        });
+      }
       const habitsList: HabitTracker[] = [];
       snapshot.forEach((doc) => {
         habitsList.push({ id: doc.id, ...doc.data() } as HabitTracker);
@@ -866,6 +888,14 @@ export default function App() {
 
     const feedbackQuery = query(collection(db, 'stories', selectedStory.id, 'feedbacks'), orderBy('createdAt', 'desc'));
     const unsubscribe = onSnapshot(feedbackQuery, (snapshot) => {
+      if (snapshot.empty && MOCK_FEEDBACKS[selectedStory.id]) {
+        MOCK_FEEDBACKS[selectedStory.id].forEach((fb) => {
+          setDoc(doc(db, 'stories', selectedStory.id, 'feedbacks', fb.id), {
+            ...fb,
+            createdAt: Timestamp.now()
+          }).catch(() => {});
+        });
+      }
       const list: Feedback[] = [];
       snapshot.forEach((doc) => {
         list.push({ id: doc.id, ...doc.data() } as Feedback);
