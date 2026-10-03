@@ -4264,9 +4264,9 @@ export default function App() {
       </main>
 
       {/* FOOTER */}
-      <footer className="bg-white border-t border-slate-100 mt-12 py-6 text-center text-xs text-slate-400">
+      <footer className="bg-white border-t border-slate-100 mt-12 py-6 text-center text-xs text-slate-500 font-medium">
         <p>© 2026 CERDAS - Cerita Digital Anak Sempatik. Literasi Hebat, Indonesia Unggul! 🇮🇩✨</p>
-        <p className="mt-1">Didukung oleh Google Gemini AI Studio & Firebase</p>
+        <p className="mt-1 text-slate-600 font-semibold">Aplikasi ini dikembangkan oleh Guru Sempatik Glory</p>
       </footer>
 
       {/* ======================================= */}
