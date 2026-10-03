@@ -2342,7 +2342,7 @@ export default function App() {
             <div className="relative overflow-hidden bg-gradient-to-r from-teal-700 to-emerald-600 rounded-3xl p-6 md:p-8 text-white shadow-lg">
               <div className="relative z-10 max-w-xl space-y-3">
                 <div className="inline-flex items-center gap-1 px-2.5 py-0.5 bg-teal-500/30 rounded-full text-xs font-semibold">
-                  📖 Pojok Baca Digital Anak
+                  📖 Pojok Baca Digital Murid
                 </div>
                 <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight">
                   Eksplorasi Dunia Imajinasi & Kebiasaan Hebat!
